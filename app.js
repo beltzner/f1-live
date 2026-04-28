@@ -383,6 +383,7 @@
           showToast('Session ended — auto-refresh stopped', 'info');
         }
         renderLeaderboard();
+        focusFirst(screens[state.currentScreen]);
       })
       .catch(function(err) {
         if (loading) loading.classList.add('hidden');
