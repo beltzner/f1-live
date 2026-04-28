@@ -383,7 +383,8 @@
           showToast('Session ended — auto-refresh stopped', 'info');
         }
         renderLeaderboard();
-        focusFirst(screens[state.currentScreen]);
+        var boardTab = document.getElementById('tab-board');
+        if (boardTab) boardTab.focus();
       })
       .catch(function(err) {
         if (loading) loading.classList.add('hidden');
