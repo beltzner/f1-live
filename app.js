@@ -92,26 +92,94 @@
     if (el) el.focus();
   }
 
+  function getZones(container) {
+    var zones = [];
+    var tabBar = container.querySelector('.tab-bar');
+    var content = container.querySelector('.content');
+    var navBar = container.querySelector('.nav-bar');
+    if (tabBar) zones.push({ el: tabBar, type: 'horizontal' });
+    if (content) zones.push({ el: content, type: 'vertical' });
+    if (navBar) zones.push({ el: navBar, type: 'horizontal' });
+    return zones;
+  }
+
+  function getZoneItems(zone) {
+    return Array.from(zone.el.querySelectorAll('.focusable:not([disabled]):not(.hidden)'));
+  }
+
+  function findCurrentZone(zones, current) {
+    for (var i = 0; i < zones.length; i++) {
+      if (zones[i].el.contains(current)) return i;
+    }
+    return -1;
+  }
+
   function moveFocus(direction) {
     var container = screens[state.currentScreen];
     if (!container) return;
-    var focusables = Array.from(
-      container.querySelectorAll('.focusable:not([disabled]):not(.hidden)')
-    );
-    if (focusables.length === 0) return;
     var current = document.activeElement;
-    var idx = focusables.indexOf(current);
-    if (idx === -1) { focusFirst(container); return; }
-    var nextIdx;
-    if (direction === 'up' || direction === 'left') {
-      nextIdx = idx > 0 ? idx - 1 : focusables.length - 1;
-    } else {
-      nextIdx = idx < focusables.length - 1 ? idx + 1 : 0;
+    var zones = getZones(container);
+    if (zones.length === 0) return;
+
+    var zi = findCurrentZone(zones, current);
+    if (zi === -1) {
+      focusFirst(container);
+      return;
     }
-    focusables[nextIdx].focus();
-    var scrollParent = focusables[nextIdx].closest('.content, .list-container');
-    if (scrollParent) {
-      focusables[nextIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+    var zone = zones[zi];
+    var items = getZoneItems(zone);
+    var idx = items.indexOf(current);
+
+    if (direction === 'left' || direction === 'right') {
+      if (zone.type === 'horizontal' && items.length > 1) {
+        var next;
+        if (direction === 'left') {
+          next = idx > 0 ? idx - 1 : items.length - 1;
+        } else {
+          next = idx < items.length - 1 ? idx + 1 : 0;
+        }
+        items[next].focus();
+      }
+      return;
+    }
+
+    if (direction === 'down') {
+      if (zone.type === 'vertical') {
+        if (idx < items.length - 1) {
+          items[idx + 1].focus();
+          items[idx + 1].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else if (zi < zones.length - 1) {
+          var nextItems = getZoneItems(zones[zi + 1]);
+          if (nextItems.length > 0) nextItems[0].focus();
+        }
+      } else {
+        if (zi < zones.length - 1) {
+          var belowItems = getZoneItems(zones[zi + 1]);
+          if (belowItems.length > 0) belowItems[0].focus();
+        }
+      }
+      return;
+    }
+
+    if (direction === 'up') {
+      if (zone.type === 'vertical') {
+        if (idx > 0) {
+          items[idx - 1].focus();
+          items[idx - 1].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else if (zi > 0) {
+          var aboveItems = getZoneItems(zones[zi - 1]);
+          if (aboveItems.length > 0) {
+            var activeTab = zones[zi - 1].el.querySelector('.active.focusable');
+            (activeTab || aboveItems[0]).focus();
+          }
+        }
+      } else {
+        if (zi > 0) {
+          var prevItems = getZoneItems(zones[zi - 1]);
+          if (prevItems.length > 0) prevItems[prevItems.length - 1].focus();
+        }
+      }
     }
   }
 
