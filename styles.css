@@ -96,8 +96,9 @@ body {
 }
 .focusable:focus {
   outline: none;
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 20px var(--focus-glow);
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4), 0 0 24px var(--focus-glow);
 }
 
 .nav-bar {
