@@ -87,9 +87,18 @@
     }
   }
 
+  function setFocus(el) {
+    var prev = document.querySelector('.focused');
+    if (prev) prev.classList.remove('focused');
+    if (el) {
+      el.focus();
+      el.classList.add('focused');
+    }
+  }
+
   function focusFirst(container) {
     var el = container.querySelector('.focusable:not([disabled]):not(.hidden)');
-    if (el) el.focus();
+    if (el) setFocus(el);
   }
 
   function getZones(container) {
@@ -139,7 +148,7 @@
         } else {
           next = idx < items.length - 1 ? idx + 1 : 0;
         }
-        items[next].focus();
+        setFocus(items[next]);
       }
       return;
     }
@@ -147,16 +156,16 @@
     if (direction === 'down') {
       if (zone.type === 'vertical') {
         if (idx < items.length - 1) {
-          items[idx + 1].focus();
+          setFocus(items[idx + 1]);
           items[idx + 1].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         } else if (zi < zones.length - 1) {
           var nextItems = getZoneItems(zones[zi + 1]);
-          if (nextItems.length > 0) nextItems[0].focus();
+          if (nextItems.length > 0) setFocus(nextItems[0]);
         }
       } else {
         if (zi < zones.length - 1) {
           var belowItems = getZoneItems(zones[zi + 1]);
-          if (belowItems.length > 0) belowItems[0].focus();
+          if (belowItems.length > 0) setFocus(belowItems[0]);
         }
       }
       return;
@@ -165,19 +174,19 @@
     if (direction === 'up') {
       if (zone.type === 'vertical') {
         if (idx > 0) {
-          items[idx - 1].focus();
+          setFocus(items[idx - 1]);
           items[idx - 1].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         } else if (zi > 0) {
           var aboveItems = getZoneItems(zones[zi - 1]);
           if (aboveItems.length > 0) {
             var activeTab = zones[zi - 1].el.querySelector('.active.focusable');
-            (activeTab || aboveItems[0]).focus();
+            setFocus(activeTab || aboveItems[0]);
           }
         }
       } else {
         if (zi > 0) {
           var prevItems = getZoneItems(zones[zi - 1]);
-          if (prevItems.length > 0) prevItems[prevItems.length - 1].focus();
+          if (prevItems.length > 0) setFocus(prevItems[prevItems.length - 1]);
         }
       }
     }
@@ -452,7 +461,7 @@
         }
         renderLeaderboard();
         var boardTab = document.getElementById('tab-board');
-        if (boardTab) boardTab.focus();
+        if (boardTab) setFocus(boardTab);
       })
       .catch(function(err) {
         if (loading) loading.classList.add('hidden');

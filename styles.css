@@ -94,7 +94,8 @@ body {
   cursor: pointer;
   min-height: 44px;
 }
-.focusable:focus {
+.focusable:focus,
+.focusable.focused {
   outline: none;
   border-color: #ffffff;
   background: rgba(255, 255, 255, 0.12);
