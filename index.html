@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <title>F1 Live</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- HOME / LEADERBOARD -->
+    <div id="home" class="screen">
+      <header class="header">
+        <h1>F1 Live</h1>
+        <span class="header-meta" id="session-name">Loading...</span>
+      </header>
+      <div class="tab-bar">
+        <button class="tab-item focusable active" id="tab-board" data-action="tab-board">Board</button>
+        <button class="tab-item focusable" id="tab-map" data-action="tab-map">Map</button>
+        <button class="tab-item focusable" id="tab-rc" data-action="tab-rc">Race Ctrl</button>
+        <button class="tab-item focusable" id="tab-weather" data-action="tab-weather">Weather</button>
+      </div>
+      <div class="content" id="home-content">
+        <div id="leaderboard-loading" class="loading-container">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Loading session data...</div>
+        </div>
+        <div id="leaderboard-error" class="error-container hidden">
+          <div class="error-icon">&#9888;</div>
+          <div class="error-message"></div>
+        </div>
+        <div id="leaderboard-list" class="list-container"></div>
+      </div>
+      <nav class="nav-bar">
+        <button class="nav-item focusable" data-action="refresh">&#8635; Refresh</button>
+        <button class="nav-item focusable primary" data-action="auto-refresh-toggle" id="auto-refresh-btn">Auto: OFF</button>
+      </nav>
+    </div>
+
+    <!-- TRACK MAP -->
+    <div id="track-map" class="screen hidden">
+      <header class="header">
+        <button class="back-btn focusable" data-action="back">&#8592;</button>
+        <h1>Track Map</h1>
+        <span class="header-meta" id="map-status">Loading...</span>
+      </header>
+      <div class="content map-content">
+        <div id="map-loading" class="loading-container">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Loading track data...</div>
+        </div>
+        <canvas id="track-canvas" width="560" height="460"></canvas>
+      </div>
+    </div>
+
+    <!-- RACE CONTROL -->
+    <div id="race-control" class="screen hidden">
+      <header class="header">
+        <button class="back-btn focusable" data-action="back">&#8592;</button>
+        <h1>Race Control</h1>
+      </header>
+      <div class="content">
+        <div id="rc-loading" class="loading-container hidden">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Loading messages...</div>
+        </div>
+        <div id="rc-list" class="list-container"></div>
+      </div>
+    </div>
+
+    <!-- WEATHER -->
+    <div id="weather" class="screen hidden">
+      <header class="header">
+        <button class="back-btn focusable" data-action="back">&#8592;</button>
+        <h1>Track Weather</h1>
+      </header>
+      <div class="content">
+        <div id="weather-loading" class="loading-container hidden">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Loading weather...</div>
+        </div>
+        <div id="weather-cards" class="data-grid"></div>
+      </div>
+    </div>
+
+    <!-- DRIVER DETAIL -->
+    <div id="driver-detail" class="screen hidden">
+      <header class="header">
+        <button class="back-btn focusable" data-action="back">&#8592;</button>
+        <h1 id="driver-name">Driver</h1>
+        <span class="header-meta" id="driver-team"></span>
+      </header>
+      <div class="content">
+        <div class="data-grid" id="driver-stats"></div>
+        <h2 class="section-title">Recent Laps</h2>
+        <div id="laps-loading" class="loading-container hidden">
+          <div class="loading-spinner"></div>
+        </div>
+        <div id="laps-list" class="list-container"></div>
+      </div>
+      <nav class="nav-bar">
+        <button class="nav-item focusable" data-action="refresh-driver">&#8635; Refresh Laps</button>
+      </nav>
+    </div>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
