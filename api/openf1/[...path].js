@@ -64,6 +64,8 @@ module.exports = async function handler(req, res) {
 
     const text = await upstream.text();
     res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json');
+    res.setHeader('X-Proxy-Upstream-URL', url);
+    res.setHeader('X-Proxy-Path-Raw', JSON.stringify(req.query.path || null));
     // Light edge cache so multiple clients reusing the same query share it.
     if (upstream.ok) res.setHeader('Cache-Control', 's-maxage=5, stale-while-revalidate=10');
     res.status(upstream.status).send(text);
