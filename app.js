@@ -233,6 +233,29 @@
     return token ? { 'Authorization': 'Bearer ' + token } : {};
   }
 
+  // Fetch a token from the server-side proxy at /api/token. Server reads
+  // credentials from Vercel env vars so the client never handles them. This
+  // is the path glasses take, since the prompt()-based sign-in flow is
+  // unusable without a keyboard.
+  function fetchTokenFromProxy() {
+    return fetch('/api/token').then(function(r) {
+      if (!r.ok) throw new Error('token proxy ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      if (!data.access_token) throw new Error('no token from proxy');
+      storeToken(data.access_token, data.expires_in || 3600);
+      return data.access_token;
+    });
+  }
+
+  // Resolve to a usable token. Returns the cached one if valid, otherwise
+  // attempts the server-side proxy. Never throws to the caller — on failure,
+  // returns null and lets apiGet surface the eventual 401.
+  function ensureToken() {
+    if (getStoredToken()) return Promise.resolve(getStoredToken());
+    return fetchTokenFromProxy().catch(function() { return null; });
+  }
+
   function signIn() {
     var email = window.prompt('OpenF1 email');
     if (!email) return;
@@ -286,6 +309,13 @@
         }
         if (res.status === 401) {
           clearToken();
+          if (retries > 0) {
+            // Token expired or invalid — try to mint a fresh one server-side
+            // and replay the request once. Keeps the 1h token expiry invisible.
+            return fetchTokenFromProxy()
+              .then(function() { return apiGet(endpoint, params, retries - 1); })
+              .catch(function() { throw new Error('Auth required — tap Sign In'); });
+          }
           throw new Error('Auth required — tap Sign In');
         }
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -566,7 +596,7 @@
     if (errorEl) errorEl.classList.add('hidden');
     if (list) list.innerHTML = '';
 
-    return loadSession()
+    return ensureToken().then(function() { return loadSession(); })
       .then(function() { return loadDrivers(); })
       .then(function() {
         // Branch early: timed sessions (Qualifying, Practice) skip race-only

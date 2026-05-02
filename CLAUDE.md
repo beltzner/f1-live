@@ -40,7 +40,13 @@ The leaderboard branches on `session.session_type` early (before any race-only e
 
 ## Authentication
 
-OpenF1 gates global API access (including past sessions) behind an OAuth2 bearer token whenever an F1 session is live. The Sign In button POSTs `grant_type=password` with the user's OpenF1 credentials to `https://api.openf1.org/token`, caches the returned `access_token` in `localStorage` under `openf1_token` along with its expiry (with a 60s buffer), and `apiGet` attaches it as `Authorization: Bearer <token>` on every request. A 401 from any endpoint clears the cached token and surfaces the "Sign In" prompt. Tokens currently expire after 1 hour.
+OpenF1 gates global API access (including past sessions) behind an OAuth2 bearer token whenever an F1 session is live.
+
+**Primary path (glasses-friendly):** `/api/token.js` is a Vercel serverless function that POSTs `grant_type=password` to `https://api.openf1.org/token` using `OPENF1_USERNAME` / `OPENF1_PASSWORD` env vars (set in the Vercel dashboard) and returns the access token. The client (`ensureToken`) calls `/api/token` on first load and any time the cached token has expired, stores the result in `localStorage` under `openf1_token`, and `apiGet` attaches it as `Authorization: Bearer <token>`. On a 401 mid-session, `apiGet` mints a fresh token and retries once, so the 1h expiry is invisible to the user.
+
+**Fallback path:** the Sign In button uses browser `prompt()` for credentials. Functional on phone/desktop, useless on glasses (no keyboard). Kept as an escape hatch when the env vars aren't configured.
+
+The CDN caches the `/api/token` response for 5 minutes (`s-maxage=300`), which is conservative against the 1h token TTL and lets multiple callers reuse the same token.
 
 ## Refresh Behavior
 
