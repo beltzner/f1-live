@@ -40,10 +40,11 @@ The leaderboard branches on `session.session_type` early (before any race-only e
 
 ## Refresh Behavior
 
-- **Leaderboard auto-refresh**: 10s interval, only when session is live. Paused when map tab is active.
-- **Map refresh**: 3s interval, only when map tab is active and session is live. Only fetches `/location`.
+- **Leaderboard auto-refresh**: 10s interval, runs whenever the Board (home) screen is visible AND the session is live. No user toggle — live data when it matters, idle otherwise. Pauses immediately when the user navigates to Map / Race Ctrl / Weather / Driver Detail.
+- **Map refresh**: 3s interval, only when the Map tab is active and session is live. Only fetches `/location`.
 - **Rate limit handling**: 429 responses retry up to 2 times with backoff. Sequential API calls to avoid bursts.
-- **Non-live sessions**: Auto-refresh is blocked. Data loads once on screen entry.
+- **Non-live sessions**: refresh stays off. The session header shows "Ended Xm ago" or "Starts in Xh"; manual Refresh button is the only data pull.
+- **Manual refresh**: clears the cache and reloads. Useful when a session transitions from upcoming to live, since the auto loop only starts after a load that detects `sessionLive=true`.
 
 ## Key Design Decisions
 

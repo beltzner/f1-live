@@ -38,7 +38,6 @@
     screenHistory: [],
     isLoading: false,
     error: null,
-    autoRefresh: false,
     autoRefreshTimer: null,
     sessionKey: 'latest',
     session: null,
@@ -519,11 +518,14 @@
       .then(function() {
         if (loading) loading.classList.add('hidden');
         updateSessionHeader();
-        if (state.autoRefresh && !state.sessionLive) {
-          stopAutoRefresh();
-          showToast('Session ended — auto-refresh stopped', 'info');
-        }
         renderLeaderboard();
+        // Auto-refresh runs whenever the Board is on screen during a live
+        // session. No user toggle: live data when it matters, idle otherwise.
+        if (state.currentScreen === 'home' && state.sessionLive) {
+          startLeaderboardRefresh();
+        } else {
+          stopLeaderboardRefresh();
+        }
         var boardTab = document.getElementById('tab-board');
         if (boardTab) setFocus(boardTab);
       })
@@ -1007,9 +1009,6 @@
         loadAllData();
         showToast('Refreshing...', 'info');
         break;
-      case 'auto-refresh-toggle':
-        toggleAutoRefresh();
-        break;
       case 'tab-board':
         setActiveTab('tab-board');
         document.getElementById('home-content').style.display = '';
@@ -1051,33 +1050,19 @@
     });
   }
 
-  function toggleAutoRefresh() {
-    if (!state.autoRefresh && !state.sessionLive) {
-      showToast('Session not live — auto-refresh disabled', 'error');
-      return;
-    }
-    state.autoRefresh = !state.autoRefresh;
-    var btn = document.getElementById('auto-refresh-btn');
-    if (state.autoRefresh) {
-      btn.innerHTML = '<span class="status-live"></span>Auto: ON';
-      state.autoRefreshTimer = setInterval(function() {
-        state.cache = {};
-        loadAllData();
-      }, CONFIG.refreshInterval);
-    } else {
-      btn.textContent = 'Auto: OFF';
-      stopAutoRefresh();
-    }
+  function startLeaderboardRefresh() {
+    if (state.autoRefreshTimer) return;
+    state.autoRefreshTimer = setInterval(function() {
+      state.cache = {};
+      loadAllData();
+    }, CONFIG.refreshInterval);
   }
 
-  function stopAutoRefresh() {
+  function stopLeaderboardRefresh() {
     if (state.autoRefreshTimer) {
       clearInterval(state.autoRefreshTimer);
       state.autoRefreshTimer = null;
     }
-    state.autoRefresh = false;
-    var btn = document.getElementById('auto-refresh-btn');
-    if (btn) btn.textContent = 'Auto: OFF';
   }
 
   function showToast(message, type) {
@@ -1098,15 +1083,20 @@
   // ==================== SCREEN ENTER ====================
 
   function onScreenEnter(screenId) {
+    // Leaderboard auto-refresh runs only while the Board (home) is on screen.
+    // Any other screen pauses it so the leaderboard isn't reshuffling under
+    // a user who's reading a different view.
+    if (screenId !== 'home') {
+      stopLeaderboardRefresh();
+    }
     if (screenId === 'track-map') {
-      pauseLeaderboardRefresh();
       initMap();
     } else {
       stopMapRefresh();
-      resumeLeaderboardRefresh();
     }
     switch (screenId) {
       case 'home':
+        // loadAllData handles starting the refresh based on session liveness.
         loadAllData();
         break;
       case 'race-control':
@@ -1118,22 +1108,6 @@
       case 'driver-detail':
         if (state.selectedDriver) renderDriverDetail(state.selectedDriver);
         break;
-    }
-  }
-
-  function pauseLeaderboardRefresh() {
-    if (state.autoRefreshTimer) {
-      clearInterval(state.autoRefreshTimer);
-      state.autoRefreshTimer = null;
-    }
-  }
-
-  function resumeLeaderboardRefresh() {
-    if (state.autoRefresh && !state.autoRefreshTimer) {
-      state.autoRefreshTimer = setInterval(function() {
-        state.cache = {};
-        loadAllData();
-      }, CONFIG.refreshInterval);
     }
   }
 
