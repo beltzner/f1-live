@@ -5,7 +5,10 @@
     appName: 'F1 Live',
     storageKey: 'hypernova_f1live',
     api: {
-      baseUrl: 'https://api.openf1.org/v1',
+      // Same-origin proxy — server-side function in /api/openf1/[...path].js
+      // forwards to api.openf1.org and adds the OAuth Bearer header so the
+      // browser never has to deal with OpenF1's broken CORS preflight.
+      baseUrl: '/api/openf1',
       cacheDuration: 60 * 1000,
     },
     refreshInterval: 10 * 1000,
