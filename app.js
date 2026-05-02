@@ -544,7 +544,9 @@
             .then(function() { return loadStints(); })
             .then(function() { return loadPitStops(); });
         }
-        return loadAllLaps();
+        // Quali/Practice. Race control is needed alongside laps so the
+        // leaderboard can ignore previous-phase laps (Q1 times during Q2).
+        return loadAllLaps().then(function() { return loadRaceControl(); });
       })
       .then(function() {
         if (loading) loading.classList.add('hidden');
@@ -635,11 +637,29 @@
     }
   }
 
+  function getCurrentPhaseStart() {
+    // OpenF1 doesn't tag laps with Q1/Q2/Q3, but each Quali phase fires a
+    // fresh "SESSION STARTED" SessionStatus message in race control. Use
+    // the most recent one to scope the leaderboard to the current phase.
+    if (!state.raceControl || !state.raceControl.length) return 0;
+    var latest = 0;
+    state.raceControl.forEach(function(m) {
+      if (m.category === 'SessionStatus' && (m.message || '').toUpperCase() === 'SESSION STARTED') {
+        var t = m.date ? new Date(m.date).getTime() : 0;
+        if (t > latest) latest = t;
+      }
+    });
+    return latest;
+  }
+
   function computeBestLaps() {
+    var phaseStart = getCurrentPhaseStart();
     var byDriver = {};
     state.allLaps.forEach(function(l) {
       if (l.is_pit_out_lap) return;
       if (typeof l.lap_duration !== 'number' || l.lap_duration <= 0) return;
+      if (phaseStart && l.date_start &&
+          new Date(l.date_start).getTime() < phaseStart) return;
       var existing = byDriver[l.driver_number];
       if (!existing || l.lap_duration < existing.best_lap) {
         byDriver[l.driver_number] = {
