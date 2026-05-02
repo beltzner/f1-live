@@ -199,6 +199,66 @@
     }
   }
 
+  // ==================== AUTH ====================
+  // OpenF1 gates global API access during live sessions behind an OAuth2
+  // bearer token. We POST credentials to /token, cache the access_token in
+  // localStorage with its expiry, and attach it to every API call. On 401
+  // we drop the token and prompt re-sign-in.
+
+  function getStoredToken() {
+    try {
+      var raw = localStorage.getItem('openf1_token');
+      if (!raw) return null;
+      var t = JSON.parse(raw);
+      if (!t.access_token || !t.expires_at) return null;
+      if (Date.now() >= t.expires_at) return null;
+      return t.access_token;
+    } catch (e) { return null; }
+  }
+
+  function storeToken(access_token, expires_in) {
+    var ms = parseInt(expires_in, 10) * 1000;
+    var expires_at = Date.now() + ms - 60000; // 1m buffer before real expiry
+    localStorage.setItem('openf1_token', JSON.stringify({
+      access_token: access_token, expires_at: expires_at,
+    }));
+  }
+
+  function clearToken() {
+    try { localStorage.removeItem('openf1_token'); } catch (e) {}
+  }
+
+  function authHeaders() {
+    var token = getStoredToken();
+    return token ? { 'Authorization': 'Bearer ' + token } : {};
+  }
+
+  function signIn() {
+    var email = window.prompt('OpenF1 email');
+    if (!email) return;
+    var pw = window.prompt('OpenF1 password');
+    if (!pw) return;
+    var body = 'grant_type=password' +
+      '&username=' + encodeURIComponent(email) +
+      '&password=' + encodeURIComponent(pw);
+    fetch('https://api.openf1.org/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body,
+    }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      if (!data.access_token) throw new Error('No token in response');
+      storeToken(data.access_token, data.expires_in || 3600);
+      showToast('Signed in', 'success');
+      state.cache = {};
+      loadAllData();
+    }).catch(function(err) {
+      showToast('Sign-in failed: ' + err.message, 'error');
+    });
+  }
+
   // ==================== API ====================
 
   function apiGet(endpoint, params, retries) {
@@ -214,7 +274,7 @@
     if (state.cache[cacheKey] && Date.now() - state.cache[cacheKey].ts < CONFIG.api.cacheDuration) {
       return Promise.resolve(state.cache[cacheKey].data);
     }
-    return fetch(url)
+    return fetch(url, { headers: authHeaders() })
       .then(function(res) {
         if (res.status === 429) {
           if (retries > 0) {
@@ -223,6 +283,10 @@
               .then(function() { return apiGet(endpoint, params, retries - 1); });
           }
           throw new Error('Rate limited (429) — try again shortly');
+        }
+        if (res.status === 401) {
+          clearToken();
+          throw new Error('Auth required — tap Sign In');
         }
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
@@ -451,7 +515,7 @@
         '&driver_number=' + firstDriver +
         '&date%3E%3D' + encodeURIComponent(lapStart) +
         '&date%3C' + encodeURIComponent(lapEnd);
-      return fetch(url).then(function(r) { return r.json(); });
+      return fetch(url, { headers: authHeaders() }).then(function(r) { return r.json(); });
     }).then(function(data) {
       if (!data || data.detail || !Array.isArray(data) || data.length === 0) return;
       state.trackOutline = data.map(function(p) { return { x: p.x, y: p.y }; });
@@ -467,7 +531,7 @@
     if (state.cache[cacheKey] && Date.now() - state.cache[cacheKey].ts < 2000) {
       return Promise.resolve();
     }
-    return fetch(url)
+    return fetch(url, { headers: authHeaders() })
       .then(function(res) {
         if (res.status === 429) return [];
         if (!res.ok) return [];
@@ -1008,6 +1072,9 @@
         state.cache = {};
         loadAllData();
         showToast('Refreshing...', 'info');
+        break;
+      case 'sign-in':
+        signIn();
         break;
       case 'tab-board':
         setActiveTab('tab-board');

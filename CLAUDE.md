@@ -38,6 +38,10 @@ The leaderboard branches on `session.session_type` early (before any race-only e
 | `/race_control` | Flag and race control messages | 60s |
 | `/weather` | Track conditions | 60s |
 
+## Authentication
+
+OpenF1 gates global API access (including past sessions) behind an OAuth2 bearer token whenever an F1 session is live. The Sign In button POSTs `grant_type=password` with the user's OpenF1 credentials to `https://api.openf1.org/token`, caches the returned `access_token` in `localStorage` under `openf1_token` along with its expiry (with a 60s buffer), and `apiGet` attaches it as `Authorization: Bearer <token>` on every request. A 401 from any endpoint clears the cached token and surfaces the "Sign In" prompt. Tokens currently expire after 1 hour.
+
 ## Refresh Behavior
 
 - **Leaderboard auto-refresh**: 10s interval, runs whenever the Board (home) screen is visible AND the session is live. No user toggle — live data when it matters, idle otherwise. Pauses immediately when the user navigates to Map / Race Ctrl / Weather / Driver Detail.
