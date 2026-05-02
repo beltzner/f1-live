@@ -43,7 +43,11 @@ async function getToken() {
 module.exports = async function handler(req, res) {
   try {
     const segments = req.query.path || [];
-    const path = Array.isArray(segments) ? segments.join('/') : String(segments);
+    const rawPath = Array.isArray(segments) ? segments.join('/') : String(segments);
+    // Vercel's catch-all sometimes inserts a leading empty segment, which
+    // produces a double-slash in the upstream URL and OpenF1 returns
+    // "Invalid route". Trim leading and duplicate slashes defensively.
+    const path = rawPath.replace(/^\/+/, '').replace(/\/+/g, '/');
     const params = Object.assign({}, req.query);
     delete params.path;
     const qs = new URLSearchParams(params).toString();
