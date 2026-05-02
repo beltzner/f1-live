@@ -48,7 +48,15 @@ module.exports = async function handler(req, res) {
     const incoming = req.url || '';
     const m = incoming.match(/^\/api\/openf1\/?([^?]*)(\?.*)?$/);
     const path = (m && m[1] ? m[1] : '').replace(/^\/+/, '').replace(/\/+/g, '/');
-    const queryString = (m && m[2]) ? m[2] : '';
+    let queryString = (m && m[2]) ? m[2] : '';
+    // Vercel rewrites the URL to also append the matched catch-all segment
+    // as a literal "...path=…" parameter. Strip any param starting with
+    // ...  before forwarding to OpenF1.
+    if (queryString.length > 1) {
+      const filtered = queryString.slice(1).split('&')
+        .filter(p => p && !p.startsWith('...'));
+      queryString = filtered.length ? '?' + filtered.join('&') : '';
+    }
     const url = 'https://api.openf1.org/v1/' + path + queryString;
 
     let token = await getToken();
