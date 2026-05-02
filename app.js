@@ -303,7 +303,24 @@
     return apiGet('/sessions', { session_key: state.sessionKey })
       .then(function(data) {
         if (data && data.length > 0) {
-          state.session = data[data.length - 1];
+          var newSession = data[data.length - 1];
+          var prevKey = state.session && state.session.session_key;
+          var changed = prevKey && prevKey !== newSession.session_key;
+          state.session = newSession;
+          if (changed) {
+            // Session flipped (e.g., Sprint Race → Qualifying). Wipe all
+            // per-session state so the previous session's data doesn't
+            // bleed into the new session's render before the fresh
+            // fetches complete.
+            state.positions = [];
+            state.intervals = {};
+            state.stints = {};
+            state.pitStops = {};
+            state.allLaps = [];
+            state.laps = {};
+            state.trackOutline = null;
+            state.carLocations = {};
+          }
           updateSessionHeader();
         }
         return state.session;
