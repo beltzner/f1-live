@@ -42,16 +42,14 @@ async function getToken() {
 
 module.exports = async function handler(req, res) {
   try {
-    const segments = req.query.path || [];
-    const rawPath = Array.isArray(segments) ? segments.join('/') : String(segments);
-    // Vercel's catch-all sometimes inserts a leading empty segment, which
-    // produces a double-slash in the upstream URL and OpenF1 returns
-    // "Invalid route". Trim leading and duplicate slashes defensively.
-    const path = rawPath.replace(/^\/+/, '').replace(/\/+/g, '/');
-    const params = Object.assign({}, req.query);
-    delete params.path;
-    const qs = new URLSearchParams(params).toString();
-    const url = 'https://api.openf1.org/v1/' + path + (qs ? '?' + qs : '');
+    // Vercel's [...path] catch-all isn't reliably populating req.query.path
+    // for plain serverless functions, so parse the upstream path and query
+    // straight out of the incoming URL.
+    const incoming = req.url || '';
+    const m = incoming.match(/^\/api\/openf1\/?([^?]*)(\?.*)?$/);
+    const path = (m && m[1] ? m[1] : '').replace(/^\/+/, '').replace(/\/+/g, '/');
+    const queryString = (m && m[2]) ? m[2] : '';
+    const url = 'https://api.openf1.org/v1/' + path + queryString;
 
     let token = await getToken();
     let upstream = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
