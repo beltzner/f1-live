@@ -14,11 +14,14 @@ Three static files, no build step:
 
 | Screen | Tab | Description |
 |--------|-----|-------------|
-| Leaderboard | Board | Driver positions, team colors, tyre compound/age, gap/interval, PIT/DNF/FIN status |
+| Leaderboard (Race) | Board | Race / Sprint Race only. Positions, team colors, tyre compound/age, gap/interval, PIT/DNF/FIN status |
+| Leaderboard (Timed) | Board | Qualifying / Practice. Drivers ranked by best lap time, gap to P1's best |
 | Track Map | Map | Circuit outline drawn from one lap of location data, car dots in team colors |
 | Race Control | Race Ctrl | Flag messages (yellow/red/green/blue/chequered) with timestamps |
 | Weather | Weather | Air/track temp, humidity, wind, pressure, rainfall |
 | Driver Detail | (tap driver) | Position, gap, interval cards + last 15 lap times with sector splits |
+
+The leaderboard branches on `session.session_type` early (before any race-only endpoint is requested), so Quali/Practice loads skip `/position`, `/intervals`, `/stints`, and `/pit` entirely. The glasses talk to the OpenF1 API through a Bluetooth proxy on the phone, so each saved round-trip matters.
 
 ## OpenF1 API Endpoints Used
 
@@ -30,7 +33,7 @@ Three static files, no build step:
 | `/intervals` | Gaps to leader and intervals | 60s |
 | `/stints` | Tyre compound and age, DNF detection | 60s |
 | `/pit` | Pit stop times, in-pit detection | 60s |
-| `/laps` | Lap times and sector splits (per driver) | 60s |
+| `/laps` | Lap times and sector splits (per driver on detail; whole field on Quali/Practice leaderboard) | 60s |
 | `/location` | Track outline + live car positions (map) | 2-3s on map |
 | `/race_control` | Flag and race control messages | 60s |
 | `/weather` | Track conditions | 60s |

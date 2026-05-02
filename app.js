@@ -52,6 +52,7 @@
     sessionLive: false,
     stints: {},
     pitStops: {},
+    allLaps: [],
     trackOutline: null,
     carLocations: {},
     mapRefreshTimer: null,
@@ -385,6 +386,25 @@
       });
   }
 
+  function isRaceSession() {
+    var t = state.session && state.session.session_type;
+    return t === 'Race';
+  }
+
+  function loadAllLaps() {
+    return apiGet('/laps', { session_key: state.sessionKey })
+      .then(function(data) {
+        state.allLaps = Array.isArray(data) ? data : [];
+      })
+      .catch(function(err) {
+        if (err && err.message && err.message.indexOf('404') >= 0) {
+          state.allLaps = [];
+          return;
+        }
+        throw err;
+      });
+  }
+
   function loadPitStops() {
     return apiGet('/pit', { session_key: state.sessionKey })
       .then(function(data) {
@@ -485,10 +505,17 @@
 
     return loadSession()
       .then(function() { return loadDrivers(); })
-      .then(function() { return loadPositions(); })
-      .then(function() { return loadIntervals(); })
-      .then(function() { return loadStints(); })
-      .then(function() { return loadPitStops(); })
+      .then(function() {
+        // Branch early: timed sessions (Qualifying, Practice) skip race-only
+        // endpoints to minimize bytes over the phone-glasses Bluetooth proxy.
+        if (isRaceSession()) {
+          return loadPositions()
+            .then(function() { return loadIntervals(); })
+            .then(function() { return loadStints(); })
+            .then(function() { return loadPitStops(); });
+        }
+        return loadAllLaps();
+      })
       .then(function() {
         if (loading) loading.classList.add('hidden');
         updateSessionHeader();
@@ -552,6 +579,72 @@
   }
 
   function renderLeaderboard() {
+    if (isRaceSession()) {
+      renderRaceLeaderboard();
+    } else {
+      renderTimedLeaderboard();
+    }
+  }
+
+  function computeBestLaps() {
+    var byDriver = {};
+    state.allLaps.forEach(function(l) {
+      if (l.is_pit_out_lap) return;
+      if (typeof l.lap_duration !== 'number' || l.lap_duration <= 0) return;
+      var existing = byDriver[l.driver_number];
+      if (!existing || l.lap_duration < existing.best_lap) {
+        byDriver[l.driver_number] = {
+          driver_number: l.driver_number,
+          best_lap: l.lap_duration,
+        };
+      }
+    });
+    var entries = Object.values(byDriver);
+    entries.sort(function(a, b) { return a.best_lap - b.best_lap; });
+    var leaderTime = entries.length > 0 ? entries[0].best_lap : 0;
+    entries.forEach(function(e, i) {
+      e.position = i + 1;
+      e.gap = i === 0 ? 0 : e.best_lap - leaderTime;
+    });
+    return entries;
+  }
+
+  function renderTimedLeaderboard() {
+    var container = document.getElementById('leaderboard-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    var entries = computeBestLaps();
+    if (entries.length === 0) {
+      container.innerHTML = '<div class="error-container"><div class="error-message">No lap times yet</div></div>';
+      return;
+    }
+
+    entries.forEach(function(e) {
+      var driver = state.drivers[e.driver_number] || {};
+      var color = getTeamColor(driver);
+      var posClass = e.position <= 3 ? ' pos-' + e.position : '';
+      var lapStr = formatLapTime(e.best_lap);
+      var gapStr = e.position === 1 ? 'LEADER' : '+' + e.gap.toFixed(3);
+      var gapClass = e.position === 1 ? 'driver-gap leader' : 'driver-gap';
+
+      var html = '<button class="list-item focusable" data-action="select-driver" data-driver="' + e.driver_number + '">' +
+        '<span class="pos' + posClass + '">' + e.position + '</span>' +
+        '<span class="team-stripe" style="background:' + color + '"></span>' +
+        '<div class="driver-info">' +
+          '<div class="driver-abbr">' + (driver.name_acronym || '#' + e.driver_number) + '</div>' +
+          '<div class="driver-team-name">' + (driver.team_name || '') + '</div>' +
+        '</div>' +
+        '<div class="' + gapClass + '">' +
+          lapStr +
+          '<br><span style="font-size:12px;color:#888">' + gapStr + '</span>' +
+        '</div>' +
+      '</button>';
+      container.insertAdjacentHTML('beforeend', html);
+    });
+  }
+
+  function renderRaceLeaderboard() {
     var container = document.getElementById('leaderboard-list');
     if (!container) return;
     container.innerHTML = '';
