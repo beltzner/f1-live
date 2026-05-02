@@ -103,9 +103,16 @@
 
   function getZones(container) {
     var zones = [];
+    var header = container.querySelector('.header');
     var tabBar = container.querySelector('.tab-bar');
     var content = container.querySelector('.content');
     var navBar = container.querySelector('.nav-bar');
+    // Header is only a zone if it has focusable items (e.g., back button on
+    // sub-screens). Without this, focus on the back button is "outside" any
+    // zone and arrow keys can't move into the content list below it.
+    if (header && header.querySelector('.focusable')) {
+      zones.push({ el: header, type: 'horizontal' });
+    }
     if (tabBar) zones.push({ el: tabBar, type: 'horizontal' });
     if (content) zones.push({ el: content, type: 'vertical' });
     if (navBar) zones.push({ el: navBar, type: 'horizontal' });
