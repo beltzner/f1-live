@@ -325,11 +325,19 @@
   function loadIntervals() {
     return apiGet('/intervals', { session_key: state.sessionKey })
       .then(function(data) {
-        if (!data) return;
         state.intervals = {};
+        if (!data) return;
         data.forEach(function(iv) {
           state.intervals[iv.driver_number] = iv;
         });
+      })
+      .catch(function(err) {
+        // Race-only endpoint: 404 expected during Quali/Practice. Treat as empty.
+        if (err && err.message && err.message.indexOf('404') >= 0) {
+          state.intervals = {};
+          return;
+        }
+        throw err;
       });
   }
 
@@ -360,6 +368,13 @@
             state.stints[s.driver_number] = s;
           }
         });
+      })
+      .catch(function(err) {
+        if (err && err.message && err.message.indexOf('404') >= 0) {
+          state.stints = {};
+          return;
+        }
+        throw err;
       });
   }
 
@@ -374,6 +389,13 @@
           }
           state.pitStops[p.driver_number].push(p);
         });
+      })
+      .catch(function(err) {
+        if (err && err.message && err.message.indexOf('404') >= 0) {
+          state.pitStops = {};
+          return;
+        }
+        throw err;
       });
   }
 
@@ -384,7 +406,7 @@
     return apiGet('/laps', {
       session_key: state.sessionKey,
       driver_number: firstDriver,
-      lap_number: 25,
+      lap_number: 1,
     }).then(function(lapData) {
       if (!lapData || !lapData[0]) return;
       var lapStart = lapData[0].date_start;
