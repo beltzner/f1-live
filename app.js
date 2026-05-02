@@ -202,90 +202,11 @@
     }
   }
 
-  // ==================== AUTH ====================
-  // OpenF1 gates global API access during live sessions behind an OAuth2
-  // bearer token. We POST credentials to /token, cache the access_token in
-  // localStorage with its expiry, and attach it to every API call. On 401
-  // we drop the token and prompt re-sign-in.
-
-  function getStoredToken() {
-    try {
-      var raw = localStorage.getItem('openf1_token');
-      if (!raw) return null;
-      var t = JSON.parse(raw);
-      if (!t.access_token || !t.expires_at) return null;
-      if (Date.now() >= t.expires_at) return null;
-      return t.access_token;
-    } catch (e) { return null; }
-  }
-
-  function storeToken(access_token, expires_in) {
-    var ms = parseInt(expires_in, 10) * 1000;
-    var expires_at = Date.now() + ms - 60000; // 1m buffer before real expiry
-    localStorage.setItem('openf1_token', JSON.stringify({
-      access_token: access_token, expires_at: expires_at,
-    }));
-  }
-
-  function clearToken() {
-    try { localStorage.removeItem('openf1_token'); } catch (e) {}
-  }
-
-  function authHeaders() {
-    var token = getStoredToken();
-    return token ? { 'Authorization': 'Bearer ' + token } : {};
-  }
-
-  // Fetch a token from the server-side proxy at /api/token. Server reads
-  // credentials from Vercel env vars so the client never handles them. This
-  // is the path glasses take, since the prompt()-based sign-in flow is
-  // unusable without a keyboard.
-  function fetchTokenFromProxy() {
-    return fetch('/api/token').then(function(r) {
-      if (!r.ok) throw new Error('token proxy ' + r.status);
-      return r.json();
-    }).then(function(data) {
-      if (!data.access_token) throw new Error('no token from proxy');
-      storeToken(data.access_token, data.expires_in || 3600);
-      return data.access_token;
-    });
-  }
-
-  // Resolve to a usable token. Returns the cached one if valid, otherwise
-  // attempts the server-side proxy. Never throws to the caller — on failure,
-  // returns null and lets apiGet surface the eventual 401.
-  function ensureToken() {
-    if (getStoredToken()) return Promise.resolve(getStoredToken());
-    return fetchTokenFromProxy().catch(function() { return null; });
-  }
-
-  function signIn() {
-    var email = window.prompt('OpenF1 email');
-    if (!email) return;
-    var pw = window.prompt('OpenF1 password');
-    if (!pw) return;
-    var body = 'grant_type=password' +
-      '&username=' + encodeURIComponent(email) +
-      '&password=' + encodeURIComponent(pw);
-    fetch('https://api.openf1.org/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body,
-    }).then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function(data) {
-      if (!data.access_token) throw new Error('No token in response');
-      storeToken(data.access_token, data.expires_in || 3600);
-      showToast('Signed in', 'success');
-      state.cache = {};
-      loadAllData();
-    }).catch(function(err) {
-      showToast('Sign-in failed: ' + err.message, 'error');
-    });
-  }
-
   // ==================== API ====================
+  // All requests go through /api/openf1 — a same-origin Vercel function that
+  // forwards to api.openf1.org and adds the OAuth Bearer token server-side
+  // (see api/openf1/[...path].js). The client doesn't touch credentials or
+  // tokens.
 
   function apiGet(endpoint, params, retries) {
     if (retries === undefined) retries = 2;
@@ -300,7 +221,7 @@
     if (state.cache[cacheKey] && Date.now() - state.cache[cacheKey].ts < CONFIG.api.cacheDuration) {
       return Promise.resolve(state.cache[cacheKey].data);
     }
-    return fetch(url, { headers: authHeaders() })
+    return fetch(url)
       .then(function(res) {
         if (res.status === 429) {
           if (retries > 0) {
@@ -309,17 +230,6 @@
               .then(function() { return apiGet(endpoint, params, retries - 1); });
           }
           throw new Error('Rate limited (429) — try again shortly');
-        }
-        if (res.status === 401) {
-          clearToken();
-          if (retries > 0) {
-            // Token expired or invalid — try to mint a fresh one server-side
-            // and replay the request once. Keeps the 1h token expiry invisible.
-            return fetchTokenFromProxy()
-              .then(function() { return apiGet(endpoint, params, retries - 1); })
-              .catch(function() { throw new Error('Auth required — tap Sign In'); });
-          }
-          throw new Error('Auth required — tap Sign In');
         }
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
@@ -548,7 +458,7 @@
         '&driver_number=' + firstDriver +
         '&date%3E%3D' + encodeURIComponent(lapStart) +
         '&date%3C' + encodeURIComponent(lapEnd);
-      return fetch(url, { headers: authHeaders() }).then(function(r) { return r.json(); });
+      return fetch(url).then(function(r) { return r.json(); });
     }).then(function(data) {
       if (!data || data.detail || !Array.isArray(data) || data.length === 0) return;
       state.trackOutline = data.map(function(p) { return { x: p.x, y: p.y }; });
@@ -564,7 +474,7 @@
     if (state.cache[cacheKey] && Date.now() - state.cache[cacheKey].ts < 2000) {
       return Promise.resolve();
     }
-    return fetch(url, { headers: authHeaders() })
+    return fetch(url)
       .then(function(res) {
         if (res.status === 429) return [];
         if (!res.ok) return [];
@@ -591,15 +501,22 @@
       });
   }
 
-  function loadAllData() {
+  function loadAllData(silent) {
     var loading = document.getElementById('leaderboard-loading');
     var errorEl = document.getElementById('leaderboard-error');
     var list = document.getElementById('leaderboard-list');
-    if (loading) loading.classList.remove('hidden');
-    if (errorEl) errorEl.classList.add('hidden');
-    if (list) list.innerHTML = '';
+    // Show the spinner / clear the list only when there's nothing on screen
+    // yet (initial load or post-error). Background refreshes leave the
+    // existing rows in place so the screen doesn't flash empty.
+    var hasData = list && list.children.length > 0;
+    var showSpinner = !silent && !hasData;
+    if (showSpinner) {
+      if (loading) loading.classList.remove('hidden');
+      if (errorEl) errorEl.classList.add('hidden');
+      if (list) list.innerHTML = '';
+    }
 
-    return ensureToken().then(function() { return loadSession(); })
+    return loadSession()
       .then(function() { return loadDrivers(); })
       .then(function() {
         // Branch early: timed sessions (Qualifying, Practice) skip race-only
@@ -623,8 +540,12 @@
         } else {
           stopLeaderboardRefresh();
         }
-        var boardTab = document.getElementById('tab-board');
-        if (boardTab) setFocus(boardTab);
+        // Reset focus to the Board tab only on the initial load — background
+        // refreshes shouldn't yank focus away from whatever the user is on.
+        if (showSpinner) {
+          var boardTab = document.getElementById('tab-board');
+          if (boardTab) setFocus(boardTab);
+        }
       })
       .catch(function(err) {
         if (loading) loading.classList.add('hidden');
@@ -678,10 +599,22 @@
   }
 
   function renderLeaderboard() {
+    // Capture focused driver row before re-render so we can re-focus the
+    // same driver after the rebuild — otherwise every refresh tick boots
+    // the user back to the body element.
+    var prev = document.activeElement;
+    var prevDriver = prev && prev.dataset && prev.dataset.driver
+      ? prev.dataset.driver : null;
+
     if (isRaceSession()) {
       renderRaceLeaderboard();
     } else {
       renderTimedLeaderboard();
+    }
+
+    if (prevDriver) {
+      var rebuilt = document.querySelector('[data-driver="' + prevDriver + '"]');
+      if (rebuilt) setFocus(rebuilt);
     }
   }
 
@@ -1103,11 +1036,8 @@
         break;
       case 'refresh':
         state.cache = {};
-        loadAllData();
+        loadAllData(true);
         showToast('Refreshing...', 'info');
-        break;
-      case 'sign-in':
-        signIn();
         break;
       case 'tab-board':
         setActiveTab('tab-board');
@@ -1154,7 +1084,7 @@
     if (state.autoRefreshTimer) return;
     state.autoRefreshTimer = setInterval(function() {
       state.cache = {};
-      loadAllData();
+      loadAllData(true);
     }, CONFIG.refreshInterval);
   }
 

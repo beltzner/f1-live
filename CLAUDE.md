@@ -38,19 +38,17 @@ The leaderboard branches on `session.session_type` early (before any race-only e
 | `/race_control` | Flag and race control messages | 60s |
 | `/weather` | Track conditions | 60s |
 
-## Authentication
+## API Access
 
-OpenF1 gates global API access (including past sessions) behind an OAuth2 bearer token whenever an F1 session is live.
+OpenF1 gates global API access (including past sessions) behind an OAuth2 bearer token whenever an F1 session is live, and its CORS preflight returns 401 instead of valid CORS headers — so the client can't talk to `api.openf1.org` directly during sessions.
 
-**Primary path (glasses-friendly):** `/api/token.js` is a Vercel serverless function that POSTs `grant_type=password` to `https://api.openf1.org/token` using `OPENF1_USERNAME` / `OPENF1_PASSWORD` env vars (set in the Vercel dashboard) and returns the access token. The client (`ensureToken`) calls `/api/token` on first load and any time the cached token has expired, stores the result in `localStorage` under `openf1_token`, and `apiGet` attaches it as `Authorization: Bearer <token>`. On a 401 mid-session, `apiGet` mints a fresh token and retries once, so the 1h expiry is invisible to the user.
+**Solution: server-side proxy.** `api/openf1/[...path].js` is a Vercel serverless function that mints an OAuth token using `OPENF1_USERNAME` / `OPENF1_PASSWORD` env vars (set in the Vercel dashboard), caches it in module memory across warm Lambda invocations (~one mint per hour), and forwards every request to `api.openf1.org/v1/<path>`. The client just calls `/api/openf1/sessions?...`, `/api/openf1/laps?...`, etc. — same-origin, no preflight, no client-side credentials.
 
-**Fallback path:** the Sign In button uses browser `prompt()` for credentials. Functional on phone/desktop, useless on glasses (no keyboard). Kept as an escape hatch when the env vars aren't configured.
-
-The CDN caches the `/api/token` response for 5 minutes (`s-maxage=300`), which is conservative against the 1h token TTL and lets multiple callers reuse the same token.
+The proxy parses the upstream path from `req.url` directly because Vercel's `[...path]` catch-all parameter wasn't reliably populated for plain serverless functions, and strips the literal `...path=` query param Vercel injects. Successful responses get an `s-maxage=5` edge cache so multiple clients reusing the same query share it.
 
 ## Refresh Behavior
 
-- **Leaderboard auto-refresh**: 10s interval, runs whenever the Board (home) screen is visible AND the session is live. No user toggle — live data when it matters, idle otherwise. Pauses immediately when the user navigates to Map / Race Ctrl / Weather / Driver Detail.
+- **Leaderboard auto-refresh**: 10s interval, runs whenever the Board (home) screen is visible AND the session is live. No user toggle — live data when it matters, idle otherwise. Pauses immediately when the user navigates to Map / Race Ctrl / Weather / Driver Detail. Background refreshes don't clear the list or show the spinner; they re-render in place. Focus is preserved on the same driver row across re-renders.
 - **Map refresh**: 3s interval, only when the Map tab is active and session is live. Only fetches `/location`.
 - **Rate limit handling**: 429 responses retry up to 2 times with backoff. Sequential API calls to avoid bursts.
 - **Non-live sessions**: refresh stays off. The session header shows "Ended Xm ago" or "Starts in Xh"; manual Refresh button is the only data pull.
