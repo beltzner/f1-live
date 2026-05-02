@@ -45,7 +45,7 @@ Three static files, no build step:
 ## Key Design Decisions
 
 - API calls are sequential (not parallel) to avoid 429 rate limits from OpenF1.
-- Track outline is fetched once from a single driver's lap 1 location data (~600 points), then cached for the session. Lap 1 is used because every session type has at least one lap (shorter Practice/Qualifying sessions don't reach later lap numbers).
+- Track outline is fetched once from a single driver's first complete timed lap (~600 location points), then cached for the session. Lap 1 is skipped because it's an out-lap from the pit garage and only covers part of the circuit; the loader walks the lap list to find the first lap with `is_pit_out_lap=false` and a non-null `lap_duration`.
 - `session_key=latest` always returns the most recent session even between race weekends.
 - DNF detection is derived from stints data (driver's last lap_end vs session max) since the API has no explicit retirement field.
 - Date filtering in the OpenF1 API uses comparison operators in the parameter key itself (e.g., `date%3E%3D` for `date>=`).

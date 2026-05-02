@@ -406,12 +406,20 @@
     return apiGet('/laps', {
       session_key: state.sessionKey,
       driver_number: firstDriver,
-      lap_number: 1,
     }).then(function(lapData) {
-      if (!lapData || !lapData[0]) return;
-      var lapStart = lapData[0].date_start;
-      var lapDur = lapData[0].lap_duration || 100;
-      var lapEnd = new Date(new Date(lapStart).getTime() + lapDur * 1000).toISOString();
+      if (!lapData || !lapData.length) return;
+      // Find first complete timed lap. Lap 1 in Quali/Practice is an out-lap
+      // from the pit garage and only covers part of the circuit.
+      var lap = null;
+      for (var i = 0; i < lapData.length; i++) {
+        if (!lapData[i].is_pit_out_lap && lapData[i].lap_duration) {
+          lap = lapData[i];
+          break;
+        }
+      }
+      if (!lap) return;
+      var lapStart = lap.date_start;
+      var lapEnd = new Date(new Date(lapStart).getTime() + lap.lap_duration * 1000).toISOString();
       var url = CONFIG.api.baseUrl + '/location?session_key=' +
         encodeURIComponent(state.sessionKey) +
         '&driver_number=' + firstDriver +
@@ -632,7 +640,7 @@
         }
         if (msg.lap_number) time += ' | Lap ' + msg.lap_number;
 
-        var html = '<div class="rc-msg ' + flagClass + '">' +
+        var html = '<div class="rc-msg focusable ' + flagClass + '" tabindex="0">' +
           '<div class="rc-msg-time">' + time + '</div>' +
           '<div class="rc-msg-text">' + (msg.message || '') + '</div>' +
           (msg.category ? '<div class="rc-msg-category">' + msg.category + '</div>' : '') +
@@ -746,7 +754,7 @@
           }
         });
 
-        var html = '<div class="lap-item">' +
+        var html = '<div class="lap-item focusable" tabindex="0">' +
           '<span class="lap-num">Lap ' + lap.lap_number + '</span>' +
           '<span class="lap-time ' + timeClass + '">' + timeStr + '</span>' +
           (sectors ? '<div class="lap-sectors">' + sectors + '</div>' : '') +
